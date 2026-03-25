@@ -10,7 +10,7 @@ public interface IRecurringTaskService
         string title,
         string? description,
         PeriodType periodType,
-        DateOnly startDate,
+        DateOnly? startDate,
         DateOnly? endDate
     );
 
@@ -19,4 +19,5 @@ public interface IRecurringTaskService
     Task DeactivateTaskAsync(Guid taskId);
 
     Task<RecurringTask?> GetTaskAsync(Guid id);
+    Task ExecuteCycleAsync(Guid taskId, DateOnly cycleStartDate);
 }

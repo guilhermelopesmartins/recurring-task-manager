@@ -9,7 +9,7 @@ public class RecurringTask
     public string Title { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public PeriodType PeriodType { get; private set; }
-    public DateOnly StartDate { get; private set; }
+    public DateOnly? StartDate { get; private set; }
     public DateOnly? EndDate { get; private set; }
     public bool IsActive { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -17,7 +17,7 @@ public class RecurringTask
     public IReadOnlyCollection<TaskCycle> Cycles => _cycles;
     private  RecurringTask() {}
 
-    public RecurringTask(string title, string? description, PeriodType periodType, DateOnly startDate, DateOnly? endDate)
+    public RecurringTask(string title, string? description, PeriodType periodType, DateOnly? startDate, DateOnly? endDate)
     {
         Id = Guid.NewGuid();
         Title = title;
