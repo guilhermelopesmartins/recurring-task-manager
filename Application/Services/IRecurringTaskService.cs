@@ -17,7 +17,14 @@ public interface IRecurringTaskService
     Task CompleteCycleAsync(Guid cycleId);
 
     Task DeactivateTaskAsync(Guid taskId);
+    Task ActivateTaskAsync(Guid taskId);
 
+    Task<RecurringTask?> GetTaskWithCyclesAsync(Guid id);
     Task<RecurringTask?> GetTaskAsync(Guid id);
-    Task ExecuteCycleAsync(Guid taskId, DateOnly cycleStartDate);
+
+    Task<List<RecurringTask>> GetAllAsync();
+
+    Task<List<RecurringTask>> GetAllWithCyclesAsync(TaskCycleStatus? filterStatus = null);
+
+    Task ExecuteCycleAsync(Guid taskId);
 }

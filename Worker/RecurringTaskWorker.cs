@@ -1,6 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using Hangfire;
+﻿using Hangfire;
 using RecurringTaskManager.Application.Service;
 using RecurringTaskManager.Domain;
 using RecurringTaskManager.Infrastructure.Persistence;
@@ -20,15 +18,15 @@ public class RecurringTaskWorker
         _recurringJobManager = recurringJobManager;
     }
 
-    public async Task RunAsync(Guid taskId, DateOnly cycleStartDate)
+    public async Task CreateJobAsync(Guid taskId)
     {
-        var task = await _repository.GetByIdAsync(taskId);
+        Console.WriteLine($"Creating job for taskId: {taskId.ToString()}");
+        var task = await _repository.GetTaskWithCyclesAsync(taskId);
         if (task == null) {
             RecurringJob.RemoveIfExists(taskId.ToString());
             return;
         }
 
-        // In future, we can give users the ability to specify the time of day for task execution. For now, we will default to 00:00 (midnight).
         var hour = 0;
         var minute = 0;
         string cronExpression;
@@ -36,15 +34,15 @@ public class RecurringTaskWorker
         switch (task.PeriodType)
         {
             case PeriodType.Daily:
-                cronExpression = task.StartDate is not null ? $"{minute} {hour} * * *" : Cron.Daily();
+                cronExpression = task.StartDate is null ? Cron.Daily() : $"{minute} {hour} * * *";
                 break;
             case PeriodType.Weekly:
-                var dow = task.StartDate?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).DayOfWeek;
-                cronExpression = task.StartDate is not null ? $"{minute} {hour} * * {(int)dow}" : Cron.Weekly();
+                var dow = (int?)task.StartDate?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).DayOfWeek;
+                cronExpression = task.StartDate is null ? Cron.Weekly() : $"{minute} {hour} * * {dow}";
                 break;
             case PeriodType.Monthly:
                 var day = task.StartDate?.Day;
-                cronExpression = task.StartDate is not null ? $"{minute} {hour} {day} * *" : Cron.Monthly();
+                cronExpression = task.StartDate is null ? Cron.Monthly() : $"{minute} {hour} {day} * *";
                 break;
             default:
                 throw new InvalidOperationException("Invalid PeriodType");
@@ -52,9 +50,10 @@ public class RecurringTaskWorker
 
         _recurringJobManager.AddOrUpdate<IRecurringTaskService>(
             taskId.ToString(),
-            s => s.ExecuteCycleAsync(taskId, cycleStartDate),
+            s => s.ExecuteCycleAsync(taskId),
             cronExpression
         );
+
         if (task.EndDate.HasValue)
         {
             var endDateTimeUtc = task.EndDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
@@ -63,5 +62,15 @@ public class RecurringTaskWorker
                 endDateTimeUtc
             );
         }
+    }
+
+    public async Task RemoveJobAsync(Guid taskId)
+    {
+        var task = await _repository.GetTaskWithCyclesAsync(taskId);
+
+        if (task is null)
+            return;
+
+        _recurringJobManager.RemoveIfExists(taskId.ToString());
     }
 }

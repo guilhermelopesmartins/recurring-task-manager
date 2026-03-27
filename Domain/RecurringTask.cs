@@ -41,4 +41,8 @@ public class RecurringTask
     {
         IsActive = false;
     }
+    public void Activate()
+    {
+        IsActive = true;
+    }
 }

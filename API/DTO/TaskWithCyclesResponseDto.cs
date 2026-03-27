@@ -3,7 +3,7 @@ using RecurringTaskManager.Domain;
 
 namespace RecurringTaskManager.API.DTO;
 
-public class TaskResponseDto
+public class TaskWithCyclesResponseDto
 {
     public Guid Id { get; set; }
 
@@ -16,4 +16,7 @@ public class TaskResponseDto
     public bool IsActive { get; set; }
 
     public DateTime CreatedAt { get; set; }
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+    public List<TaskCycleDto> Cycles { get; set; } = new List<TaskCycleDto>();
 }

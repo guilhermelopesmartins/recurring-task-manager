@@ -30,7 +30,6 @@ public class RecurringTaskService : IRecurringTaskService
         await _recurringTaskRepository.AddAsync(task);
 
         var delay = TimeSpan.Zero;
-        var startDateCycle = task.StartDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         if (task.StartDate.HasValue && task.StartDate is not null)
         {
             var startDateTimeUtc = task.StartDate?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
@@ -38,7 +37,7 @@ public class RecurringTaskService : IRecurringTaskService
             delay = (TimeSpan)(computedDelay > TimeSpan.Zero ? computedDelay : TimeSpan.Zero);
         }
         _backgroundJobClient.Schedule<RecurringTaskWorker>(
-                worker => worker.RunAsync(task.Id, startDateCycle),
+                worker => worker.CreateJobAsync(task.Id),
                 delay
             );
 
@@ -60,11 +59,15 @@ public class RecurringTaskService : IRecurringTaskService
         cycle.CompleteCycle();
 
         await _recurringTaskRepository.UpdateAsync(task);
+
+        _backgroundJobClient.Enqueue<RecurringTaskWorker>(
+            worker => worker.RemoveJobAsync(task.Id)
+        );
     }
 
     public async Task DeactivateTaskAsync(Guid taskId)
     {
-        var task = await _recurringTaskRepository.GetByIdAsync(taskId);
+        var task = await _recurringTaskRepository.GetTaskWithCyclesAsync(taskId);
 
         if (task == null)
             throw new Exception("Task not found");
@@ -72,6 +75,31 @@ public class RecurringTaskService : IRecurringTaskService
         task.Deactivate();
 
         await _recurringTaskRepository.UpdateAsync(task);
+
+        _backgroundJobClient.Enqueue<RecurringTaskWorker>(
+            worker => worker.RemoveJobAsync(task.Id)
+        );
+    }
+
+    public async Task ActivateTaskAsync(Guid taskId)
+    {
+        var task = await _recurringTaskRepository.GetTaskWithCyclesAsync(taskId);
+
+        if (task == null)
+            throw new Exception("Task not found");
+
+        task.Activate();
+
+        await _recurringTaskRepository.UpdateAsync(task);
+
+        _backgroundJobClient.Enqueue<RecurringTaskWorker>(
+            worker => worker.CreateJobAsync(task.Id)
+        );
+    }
+
+    public async Task<RecurringTask?> GetTaskWithCyclesAsync(Guid id)
+    {
+        return await _recurringTaskRepository.GetTaskWithCyclesAsync(id);
     }
 
     public async Task<RecurringTask?> GetTaskAsync(Guid id)
@@ -79,8 +107,30 @@ public class RecurringTaskService : IRecurringTaskService
         return await _recurringTaskRepository.GetByIdAsync(id);
     }
 
-    public async Task ExecuteCycleAsync(Guid taskId, DateOnly cycleStartDate)
+    public async Task<List<RecurringTask>> GetAllAsync()
     {
+        return await _recurringTaskRepository.GetAllAsync();
+    }
+
+    public async Task<List<RecurringTask>> GetAllWithCyclesAsync(TaskCycleStatus? filterStatus = null)
+    {
+        var tasks = await _recurringTaskRepository.GetAllWithCyclesAsync();
+
+        if (!filterStatus.HasValue)
+            return tasks;
+
+        foreach (var t in tasks)
+        {
+            var filtered = t.Cycles.Where(c => c.Status == filterStatus.Value).ToList();
+        }
+
+        return tasks;
+    }
+
+    public async Task ExecuteCycleAsync(Guid taskId)
+    {
+        Console.WriteLine($"Executing cycle for task {taskId} at {DateTime.UtcNow}");
+
         var task = await _recurringTaskRepository.GetByIdAsync(taskId);
 
         if (task == null)
@@ -89,11 +139,16 @@ public class RecurringTaskService : IRecurringTaskService
         if (!task.IsActive)
             return;
 
+        var cycleStartDate = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        if (await _recurringTaskRepository.CycleExistsAsync(taskId, cycleStartDate))
+            return;
+
         DateOnly endCycle;
         switch (task.PeriodType)
         {
             case PeriodType.Daily:
-                endCycle = cycleStartDate.AddDays(1);
+                endCycle = cycleStartDate;
                 break;
             case PeriodType.Weekly:
                 endCycle = cycleStartDate.AddDays(6);
@@ -105,8 +160,14 @@ public class RecurringTaskService : IRecurringTaskService
                 throw new InvalidOperationException("Invalid PeriodType");
         }
 
-        task.AddCycle(cycleStartDate, endCycle);
+        var active = await _recurringTaskRepository.GetActiveCycleAsync(taskId);
+        if (active is not null)
+        {
+            active.FailCycle();
+            await _recurringTaskRepository.UpdateCycleAsync(active);
+        }
 
-        await _recurringTaskRepository.UpdateAsync(task);
+        var newCycle = task.AddCycle(cycleStartDate, endCycle);
+        await _recurringTaskRepository.AddCycleAsync(newCycle);
     }
 }

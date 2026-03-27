@@ -34,9 +34,11 @@ public class TaskCycle
     
     public void FailCycle()
     {
-        if (Status != TaskCycleStatus.Completed)
+        if (Status != TaskCycleStatus.Active)
         {
-            throw new Exception("Cycle is already completed");
+            throw new Exception("Cannot fail cycle unless it's active");
         }
+
+        Status = TaskCycleStatus.Failed;
     }
 }

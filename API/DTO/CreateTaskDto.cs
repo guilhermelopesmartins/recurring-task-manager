@@ -11,7 +11,7 @@ public class CreateTaskDto
 
     public PeriodType PeriodType { get; set; }
 
-    public DateOnly StartDate { get; set; }
+    public DateOnly? StartDate { get; set; }
 
     public DateOnly? EndDate { get; set; }
 }
